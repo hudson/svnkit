@@ -12,6 +12,7 @@
 package org.tmatesoft.svn.core.internal.wc;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Map;
@@ -74,7 +75,11 @@ public class EclipseSVNAuthenticationManager extends DefaultSVNAuthenticationMan
                 String sslKind = (String) info.get("ssl-kind");
                 if (sslKind != null && SVNSSLAuthentication.MSCAPI.equals(sslKind)) {
                     String alias = (String) info.get("alias");
-                    return new SVNSSLAuthentication(sslKind, alias, authMayBeStored, url, false);
+                    try {
+                        return new SVNSSLAuthentication(sslKind, alias, authMayBeStored, url, false);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e); //TODO improve this hack
+                    }
                 }
                 String password = (String) info.get("password");
                 if (SVNSSLAuthentication.isCertificatePath(realm)) {

@@ -22,6 +22,7 @@ import org.tmatesoft.svn.core.SVNErrorCode;
 import org.tmatesoft.svn.core.SVNErrorMessage;
 import org.tmatesoft.svn.core.SVNException;
 import org.tmatesoft.svn.core.SVNURL;
+import org.tmatesoft.svn.core.auth.*;
 import org.tmatesoft.svn.core.auth.ISVNAuthenticationManager;
 import org.tmatesoft.svn.core.auth.ISVNAuthenticationProvider;
 import org.tmatesoft.svn.core.auth.ISVNProxyManager;
@@ -56,6 +57,7 @@ public class DefaultSVNAuthenticationManager implements ISVNAuthenticationManage
     private int myLastProviderIndex;
     private SVNAuthentication myLastLoadedAuth;
     private boolean myIsAuthenticationForced;
+    private ISVNAuthenticationOutcomeListener outcomeListener;
 
     public DefaultSVNAuthenticationManager(File configDirectory, boolean storeAuth, String userName, String password) {
         this(configDirectory, storeAuth, userName, password, null, null);
@@ -100,7 +102,11 @@ public class DefaultSVNAuthenticationManager implements ISVNAuthenticationManage
 
     public void setAuthenticationProvider(ISVNAuthenticationProvider provider) {
         // add provider to list
-        myProviders[3] = provider; 
+        myProviders[3] = provider;
+
+        // this hack makes it easier for ISVNAuthenticationProvider to get notified of the outcome.
+        if (provider instanceof ISVNAuthenticationOutcomeListener)
+            setAuthenticationOutcomeListener((ISVNAuthenticationOutcomeListener) provider);
     }
 
     public DefaultSVNOptions getDefaultOptions() {
@@ -124,7 +130,7 @@ public class DefaultSVNAuthenticationManager implements ISVNAuthenticationManage
     public Collection getAuthTypes(SVNURL url) {
         return getHostOptionsProvider().getHostOptions(url).getAuthTypes();
     }
-    
+
     public ISVNProxyManager getProxyManager(SVNURL url) throws SVNException {
         final ISVNHostOptions hostOptions = getHostOptionsProvider().getHostOptions(url);
         String proxyHost = hostOptions.getProxyHost();
@@ -170,7 +176,7 @@ public class DefaultSVNAuthenticationManager implements ISVNAuthenticationManage
                 return auth;
             }
             if (i == 3) {
-                SVNErrorManager.cancel("authentication cancelled", SVNLogType.WC);
+                SVNErrorManager.cancel("No credential to try. Authentication failed", SVNLogType.WC);
             }
         }
         // end of probe. if we were asked for username for ssh and didn't find anything 
@@ -216,6 +222,8 @@ public class DefaultSVNAuthenticationManager implements ISVNAuthenticationManage
     }
 
     public void acknowledgeAuthentication(boolean accepted, String kind, String realm, SVNErrorMessage errorMessage, SVNAuthentication authentication) throws SVNException {
+        if (outcomeListener!=null)
+            outcomeListener.acknowledgeAuthentication(accepted,kind,realm,errorMessage,authentication);
         if (!accepted) {
             myPreviousErrorMessage = errorMessage;
             myPreviousAuthentication = authentication;
@@ -233,6 +241,10 @@ public class DefaultSVNAuthenticationManager implements ISVNAuthenticationManage
             // do not cache explicit credentials in runtime cache?
             ((CacheAuthenticationProvider) myProviders[1]).saveAuthentication(authentication, realm);
         }
+    }
+
+    public void setAuthenticationOutcomeListener(ISVNAuthenticationOutcomeListener listener) {
+        this.outcomeListener = listener;
     }
 
 	public void acknowledgeTrustManager(TrustManager manager) {
@@ -324,7 +336,7 @@ public class DefaultSVNAuthenticationManager implements ISVNAuthenticationManage
     }
 
     protected class DumbAuthenticationProvider implements ISVNAuthenticationProvider {
-        
+
         private String myUserName;
         private String myPassword;
         private boolean myIsStore;
@@ -386,7 +398,7 @@ public class DefaultSVNAuthenticationManager implements ISVNAuthenticationManage
         }
     }
 
-    private class CacheAuthenticationProvider implements ISVNAuthenticationProvider {        
+    private class CacheAuthenticationProvider implements ISVNAuthenticationProvider {
 
         public SVNAuthentication requestClientAuthentication(String kind, SVNURL url, String realm, SVNErrorMessage errorMessage, SVNAuthentication previousAuth, boolean authMayBeStored) {
             return (SVNAuthentication) getRuntimeAuthStorage().getData(kind, realm);
@@ -450,7 +462,7 @@ public class DefaultSVNAuthenticationManager implements ISVNAuthenticationManage
             return super.isStorePlainTextPassphrases(realm, auth);
         }
     }
-    
+
     private static final class SimpleProxyManager implements ISVNProxyManager {
 
         private String myProxyHost;

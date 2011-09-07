@@ -12,6 +12,7 @@
 package org.tmatesoft.svn.core.internal.wc;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,6 +31,7 @@ import org.tmatesoft.svn.core.auth.SVNSSLAuthentication;
 import org.tmatesoft.svn.core.auth.SVNUserNameAuthentication;
 import org.tmatesoft.svn.core.internal.util.jna.SVNJNAUtil;
 import org.tmatesoft.svn.util.SVNLogType;
+import com.trilead.ssh2.crypto.Base64;
 
 /**
  * @author TMate Software Ltd.
@@ -152,23 +154,42 @@ public class DefaultSVNPersistentAuthenticationProvider implements ISVNAuthentic
                     if (sslClientCert.lastIndexOf(';') > 0) {
                         alias = sslClientCert.substring(sslClientCert.lastIndexOf(';') + 1);
                     }
-                    return new SVNSSLAuthentication(SVNSSLAuthentication.MSCAPI, alias, authMayBeStored, url, false);
+                    try {
+                        return new SVNSSLAuthentication(SVNSSLAuthentication.MSCAPI, alias, authMayBeStored, url,
+                            false);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e); //TODO improve this hack
+                    }
                 }
 
                 sslClientCert = SVNSSLAuthentication.formatCertificatePath(sslClientCert);
 
                 String sslClientCertPassword = hostOptions.getSSLClientCertPassword();
                 File clientCertFile = sslClientCert != null ? new File(sslClientCert) : null;
-                SVNSSLAuthentication sslAuth = new SVNSSLAuthentication(clientCertFile, sslClientCertPassword, authMayBeStored, url, false);
+                if (sslClientCert != null) {
+                    try {
+                        SVNSSLAuthentication sslAuth = new SVNSSLAuthentication(clientCertFile, sslClientCertPassword,
+                            authMayBeStored, url, false);
+                        sslAuth.setCertificatePath(sslClientCert);
+                        return sslAuth;
+                    } catch (IOException e) {
+                        throw new RuntimeException(e); // hack to minimize patching - Kohsuke
+                    }
+                }
                 if (sslClientCertPassword == null || "".equals(sslClientCertPassword)) {
                     // read from cache at once.
                     SVNPasswordAuthentication passphrase = readSSLPassphrase(kind, sslClientCert, authMayBeStored);
                     if (passphrase != null && passphrase.getPassword() != null) {
-                        sslAuth = new SVNSSLAuthentication(clientCertFile, passphrase.getPassword(), authMayBeStored, url, false);
+                        try {
+                            SVNSSLAuthentication sslAuth = new SVNSSLAuthentication(clientCertFile,
+                                passphrase.getPassword(), authMayBeStored, url, false);
+                            sslAuth.setCertificatePath(sslClientCert);
+                            return sslAuth;
+                        } catch (IOException e) {
+                            throw new RuntimeException(e); // hack to minimize patching - Kohsuke
+                        }
                     }
                 }
-                sslAuth.setCertificatePath(sslClientCert);
-                return sslAuth;
             }
         }
 
@@ -233,20 +254,41 @@ public class DefaultSVNPersistentAuthenticationProvider implements ISVNAuthentic
                 } else if (ISVNAuthenticationManager.USERNAME.equals(kind)) {
                     return new SVNUserNameAuthentication(userName, authMayBeStored, url, false);
                 } else if (ISVNAuthenticationManager.SSL.equals(kind)) {
-                    if (isMSCapi(sslKind)) {
-                        String alias = SVNPropertyValue.getPropertyAsString(values.getSVNPropertyValue("alias"));
-                        return new SVNSSLAuthentication(SVNSSLAuthentication.MSCAPI, alias, authMayBeStored, url, false);
-                    }
-                    String passphrase = readPassphrase(storedRealm, passwordStorage, values);
-                    SVNSSLAuthentication sslAuth = new SVNSSLAuthentication(new File(path), passphrase, authMayBeStored, url, false);
-                    if (passphrase == null || "".equals(passphrase)) {
-                        SVNPasswordAuthentication passphraseAuth = readSSLPassphrase(kind, path, authMayBeStored);
-                        if (passphraseAuth != null && passphraseAuth.getPassword() != null) {
-                            sslAuth = new SVNSSLAuthentication(new File(path), passphraseAuth.getPassword(), authMayBeStored, url, false);
+                    /*
+                    //TODO verify it, old KK version was:
+                         try {
+                            if (isMSCapi(sslKind)) {
+                                String alias = SVNPropertyValue.getPropertyAsString(values.getSVNPropertyValue("alias"));
+                                return new SVNSSLAuthentication(SVNSSLAuthentication.MSCAPI, alias, authMayBeStored, url, false);
+                            }
+                            String cert = SVNPropertyValue.getPropertyAsString(values.getSVNPropertyValue("cert"));
+                            return new SVNSSLAuthentication(Base64.decode(cert.toCharArray()), passphrase, authMayBeStored, url, false);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e); // hack to minimize patching - Kohsuke
                         }
+                     */
+                    try {
+                        if (isMSCapi(sslKind)) {
+                            String alias = SVNPropertyValue.getPropertyAsString(values.getSVNPropertyValue("alias"));
+                            return new SVNSSLAuthentication(SVNSSLAuthentication.MSCAPI, alias, authMayBeStored, url,
+                                false);
+                        }
+                        String passphrase = readPassphrase(storedRealm, passwordStorage, values);
+                        SVNSSLAuthentication sslAuth = new SVNSSLAuthentication(new File(path), passphrase,
+                            authMayBeStored, url, false);
+                        if (passphrase == null || "".equals(passphrase)) {
+                            SVNPasswordAuthentication passphraseAuth = readSSLPassphrase(kind, path, authMayBeStored);
+                            if (passphraseAuth != null && passphraseAuth.getPassword() != null) {
+                                sslAuth = new SVNSSLAuthentication(new File(path), passphraseAuth.getPassword(),
+                                    authMayBeStored, url, false);
+                            }
+                        }
+                        sslAuth.setCertificatePath(path);
+                        return sslAuth;
+                    } catch (IOException e) {
+                        throw new RuntimeException(e); //TODO improve this hack
                     }
-                    sslAuth.setCertificatePath(path);
-                    return sslAuth;
+
                 }
             } catch (SVNException e) {
                 //
@@ -398,8 +440,7 @@ public class DefaultSVNPersistentAuthenticationProvider implements ISVNAuthentic
             SVNSSLAuthentication sslAuth = (SVNSSLAuthentication) auth;
             if (SVNSSLAuthentication.SSL.equals(sslAuth.getSSLKind())) {
                 if (sslAuth.getCertificateFile() != null) {
-                    String path = sslAuth.getCertificatePath();
-                    values.put("key", path);
+                    values.put("cert", new String(Base64.encode(sslAuth.getCertificateFile())));
                 }
             } else if (SVNSSLAuthentication.MSCAPI.equals(sslAuth.getSSLKind())) {
                 values.put("ssl-kind", sslAuth.getSSLKind());

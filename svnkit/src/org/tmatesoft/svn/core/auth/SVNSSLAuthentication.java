@@ -11,7 +11,12 @@
  */
 package org.tmatesoft.svn.core.auth;
 
+import org.tmatesoft.svn.core.internal.wc.admin.SVNTranslator;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 
 import org.tmatesoft.svn.core.SVNURL;
 import org.tmatesoft.svn.core.internal.util.SVNPathUtil;
@@ -32,7 +37,7 @@ public class SVNSSLAuthentication extends SVNAuthentication {
     public static final String MSCAPI = "MSCAPI";
     public static final String SSL = "SSL";
     
-    private File myCertificate;
+    private byte[] myCertificate;
     private String myPassword;
     private String mySSLKind;
     private String myAlias;
@@ -46,28 +51,45 @@ public class SVNSSLAuthentication extends SVNAuthentication {
      * @param storageAllowed   to store or not this credential in a 
      *                         credentials cache    
      */
-    public SVNSSLAuthentication(File certFile, String password, boolean storageAllowed) {
-        this(certFile, password, storageAllowed, null, false);
+    public SVNSSLAuthentication(File certFile, String password, boolean storageAllowed, SVNURL url, boolean isPartial) throws IOException {
+        super(ISVNAuthenticationManager.SSL, null, storageAllowed);
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        FileInputStream in = new FileInputStream(certFile);
+        try {
+            SVNTranslator.copy(in,baos);
+        } finally {
+            in.close();
+        }
+        myCertificate = baos.toByteArray();
+        myPassword = password;
+    }
+
+    public SVNSSLAuthentication(File certFile, String password, boolean storageAllowed) throws IOException {
+        this(certFile,password,storageAllowed,null,false);
+    }
+
+    public SVNSSLAuthentication(byte[] certFile, String password, boolean storageAllowed) {
+        this(certFile,password,storageAllowed,null,false);
     }
 
     /**
-     * Creates an SSL credentials object. 
-     * 
+     * Creates an SSL credentials object.
+     *
      * @param certFile         user's certificate file
-     * @param password         user's password 
-     * @param storageAllowed   to store or not this credential in a 
+     * @param password         user's password
+     * @param storageAllowed   to store or not this credential in a
      *                         credentials cache
      * @param url              url these credentials are applied to
      * @since 1.3.1
      */
-    public SVNSSLAuthentication(File certFile, String password, boolean storageAllowed, SVNURL url, boolean isPartial) {
+    public SVNSSLAuthentication(byte[] certFile, String password, boolean storageAllowed, SVNURL url, boolean isPartial) {
         super(ISVNAuthenticationManager.SSL, null, storageAllowed, url, isPartial);
         myCertificate = certFile;
         myPassword = password;
         mySSLKind = SSL;
     }
 
-    public SVNSSLAuthentication(String sslKind, String alias, boolean storageAllowed, SVNURL url, boolean isPartial) {
+    public SVNSSLAuthentication(String sslKind, String alias, boolean storageAllowed, SVNURL url, boolean isPartial) throws IOException {
         this((File) null, null, storageAllowed, url, isPartial);
         mySSLKind = sslKind;
         myAlias = alias;
@@ -87,7 +109,7 @@ public class SVNSSLAuthentication extends SVNAuthentication {
      * 
      * @return certificate file
      */
-    public File getCertificateFile() {
+    public byte[] getCertificateFile() {
         return myCertificate;
     }
 
@@ -101,14 +123,11 @@ public class SVNSSLAuthentication extends SVNAuthentication {
     public String getAlias() {
         return myAlias;
     }
-    
+
     public String getCertificatePath() {
-        if (myCertificatePath != null) {
-            return myCertificatePath;
-        }
-        return myCertificate.getAbsolutePath();
+        return myCertificatePath;
     }
-    
+
     public void setCertificatePath(String path) {
         path = formatCertificatePath(path);
         myCertificatePath = path;
@@ -121,7 +140,7 @@ public class SVNSSLAuthentication extends SVNAuthentication {
     public static String formatCertificatePath(String path) {
         path = new File(path).getAbsolutePath();
         path = SVNPathUtil.validateFilePath(path);
-        if (SVNFileUtil.isWindows && path.length() >= 3 && 
+        if (SVNFileUtil.isWindows && path.length() >= 3 &&
                 path.charAt(1) == ':' &&
                 path.charAt(2) == '/' &&
                 Character.isLowerCase(path.charAt(0))) {

@@ -637,7 +637,7 @@ public abstract class SVNAdminArea {
             } else if (e instanceof Error) {
                 throw (Error) e;
             }
-            throw new SVNException(SVNErrorMessage.create(SVNErrorCode.UNKNOWN), e);
+            throw new SVNException(SVNErrorMessage.create(SVNErrorCode.UNKNOWN, e));
         }
         runner.logCompleted(this);
         // delete all logs, there shoudn't be left unprocessed.
@@ -1226,7 +1226,7 @@ public abstract class SVNAdminArea {
                 return;
             }
             if (entry != null && entry.isFile() && entry.isScheduledForAddition()) {
-                // if this implicit item was scheduled for addition, 
+                // if this implicit item was scheduled for addition,
                 // but wasn't actually committed, then skip it.
                 File committedFile = getBaseFile(target, true);
                 if (!committedFile.isFile()) {

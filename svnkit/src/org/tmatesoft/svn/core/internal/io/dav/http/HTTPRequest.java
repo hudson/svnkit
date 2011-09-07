@@ -227,6 +227,10 @@ class HTTPRequest {
         if (header == null) {
             return -1;
         }
+        String connection = header.getFirstHeaderValue("Connection");
+        if (connection != null && connection.indexOf("close")>=0) {
+            return -1;
+        }
         String keepAlive = header.getFirstHeaderValue("Keep-Alive");
         if (keepAlive == null && status.isHTTP11()) {
             // HTTP/1.1
@@ -248,7 +252,7 @@ class HTTPRequest {
                     }
                 }
             }
-            return -1;
+            return -1; // no keep alive
         }
         // HTTP/1.1
         String[] fields = keepAlive.split(",");
@@ -447,5 +451,5 @@ class HTTPRequest {
     public void setCookies(Collection cookie) {
         myCookies = cookie;
     }
-    
+
 }

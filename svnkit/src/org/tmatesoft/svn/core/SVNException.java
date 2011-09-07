@@ -35,7 +35,7 @@ public class SVNException extends Exception {
      * @param errorMessage an error message
      */
     public SVNException(SVNErrorMessage errorMessage) {
-        this(errorMessage, errorMessage.getCause());
+        this(errorMessage, errorMessage);
     }
     
     /**
@@ -43,22 +43,27 @@ public class SVNException extends Exception {
      * 
      * @param errorMessage an error message
      * @param cause        the real cause of the error
+     *
+     * @deprecated
+     *      Use {@link #SVNException(SVNErrorMessage)} and set the cause via {@link SVNErrorMessage#initCause(Throwable)}
      */
     public SVNException(SVNErrorMessage errorMessage, Throwable cause) {
-        super(cause);
-        if (cause instanceof SVNException) {
-            SVNErrorMessage childMessages = ((SVNException) cause).getErrorMessage();
-            SVNErrorMessage parent = errorMessage;
-            while(parent.hasChildErrorMessage()) {
-                parent = parent.getChildErrorMessage();
-            }
-            if (parent != childMessages) {
-                parent.setChildErrorMessage(childMessages);
-            }
-        }
+        super(cause!=null?cause:errorMessage);
+//      this can create cyclic reference among messages, if cause already contains errorMessage as a child
+//        if (cause instanceof SVNException) {
+//            SVNErrorMessage childMessages = ((SVNException) cause).getErrorMessage();
+//            SVNErrorMessage parent = errorMessage;
+//            while(parent.hasChildErrorMessage()) {
+//                parent = parent.getChildErrorMessage();
+//            }
+//            if (parent != childMessages) {
+//                parent.setChildErrorMessage(childMessages);
+//            }
+//        }
+
         myErrorMessage = errorMessage;
     }
-    
+
     /**
      * Returns an error message provided to this exception object.
      * 

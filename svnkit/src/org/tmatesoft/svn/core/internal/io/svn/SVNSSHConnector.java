@@ -86,8 +86,7 @@ public class SVNSSHConnector implements ISVNConnector {
             SSHConnectionInfo connection = null;
             
             // lock SVNSSHSession to make sure connection opening and session creation is atomic.
-            SVNSSHSession.lock(Thread.currentThread());
-            try {
+            synchronized(SVNSSHSession.class) {
                 while (authentication != null) {
                     try {
                         ISVNSSHHostVerifier verifier = (ISVNSSHHostVerifier) (authManager instanceof ISVNSSHHostVerifier ? authManager : null);
@@ -163,8 +162,6 @@ public class SVNSSHConnector implements ISVNConnector {
                     SVNErrorMessage err = SVNErrorMessage.create(SVNErrorCode.RA_SVN_CONNECTION_CLOSED, "Cannot connect to ''{0}'': {1}", new Object[] {repository.getLocation().setPath("", false), e.getMessage()});
                     SVNErrorManager.error(err, e, SVNLogType.NETWORK);
                 }
-            } finally {
-                SVNSSHSession.unlock();
             }
         }
     }
@@ -177,8 +174,7 @@ public class SVNSSHConnector implements ISVNConnector {
             // close session and connection in atomic way.
             SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, 
                     Thread.currentThread() + ": ABOUT TO CLOSE SESSION IN : " + myConnection);
-            SVNSSHSession.lock(Thread.currentThread());
-            try {
+            synchronized (SVNSSHSession.class) {
                 if (myConnection != null) {
                     if (myConnection.closeSession(mySession)) {
                         // no sessions left in connection, close it.
@@ -189,8 +185,6 @@ public class SVNSSHConnector implements ISVNConnector {
                         myConnection = null;
                     }
                 }
-            } finally {
-                SVNSSHSession.unlock();
             }
             
         }

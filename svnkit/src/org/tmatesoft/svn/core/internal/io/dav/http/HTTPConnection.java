@@ -40,6 +40,7 @@ import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
+import org.tmatesoft.svn.core.SVNCancelException;
 import org.tmatesoft.svn.core.SVNErrorCode;
 import org.tmatesoft.svn.core.SVNErrorMessage;
 import org.tmatesoft.svn.core.SVNException;
@@ -121,6 +122,7 @@ class HTTPConnection implements IHTTPConnection {
     private boolean myIsSpoolAll;
     private File mySpoolDirectory;
     private long myNextRequestTimeout;
+    private static final SVNPasswordAuthentication BOGUS_AUTH = new SVNPasswordAuthentication("qaOWQ8w3-byHudson","OGQCrcJ9-byHudson",false);
     private Collection myCookies;
     private int myRequestCount;
 
@@ -282,8 +284,20 @@ class HTTPConnection implements IHTTPConnection {
     }
     
     public HTTPStatus request(String method, String path, HTTPHeader header, InputStream body, int ok1, int ok2, OutputStream dst, DefaultHandler handler, SVNErrorMessage context) throws SVNException {
+        try {
+            return _request(method,path,header,body,ok1,ok2,dst,handler,context);
+        } catch (SVNCancelException e) {
+            throw new SVNCancelException(SVNErrorMessage.create(SVNErrorCode.CANCELLED, method+' '+path+" failed"), e); // retain the type of the exception
+        } catch (RuntimeException e) {
+            throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_DAV_REQUEST_FAILED, method+' '+path+" failed").initCause(e));
+        } catch (SVNException e) {
+            throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_DAV_REQUEST_FAILED, method+' '+path+" failed").initCause(e));
+        }
+    }
+
+    private HTTPStatus _request(String method, String path, HTTPHeader header, InputStream body, int ok1, int ok2, OutputStream dst, DefaultHandler handler, SVNErrorMessage context) throws SVNException {
         myRequestCount++;
-        
+
         if ("".equals(path) || path == null) {
             path = "/";
         }
@@ -294,11 +308,13 @@ class HTTPConnection implements IHTTPConnection {
         HTTPSSLKeyManager keyManager = myKeyManager == null && authManager != null ? createKeyManager() : myKeyManager;
         TrustManager trustManager = myTrustManager == null && authManager != null ? authManager.getTrustManager(myRepository.getLocation()) : myTrustManager;
 
-        String sslRealm = "<" + myHost.getProtocol() + "://" + myHost.getHost() + ":" + myHost.getPort() + ">";
         SVNAuthentication httpAuth = myLastValidAuth;
         boolean isAuthForced = authManager != null ? authManager.isAuthenticationForced() : false;
         if (httpAuth == null && isAuthForced) {
-            httpAuth = authManager.getFirstAuthentication(ISVNAuthenticationManager.PASSWORD, sslRealm, null);
+            // send a bogus credential to force the server to reject access. That causes the server to send out
+            // 401, which enables us to learn the realm name. If we just send in the corret username/password first,
+            // then we won't be able to learn the security realm that the credential is supposed to be fore.
+            httpAuth = BOGUS_AUTH;
             myChallengeCredentials = new HTTPBasicAuthentication((SVNPasswordAuthentication)httpAuth, myCharset);
         } 
         String realm = null;
@@ -318,7 +334,7 @@ class HTTPConnection implements IHTTPConnection {
         int authAttempts = 0;
         while (true) {
             HTTPStatus status = null;
-            if (myNextRequestTimeout < 0 || System.currentTimeMillis() >= myNextRequestTimeout) {
+            if (System.currentTimeMillis() >= myNextRequestTimeout) {
                 SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, "Keep-Alive timeout detected");
                 close();
             }
@@ -352,7 +368,7 @@ class HTTPConnection implements IHTTPConnection {
                     if (myCookies != null && !myCookies.isEmpty()) {
                         request.setCookies(myCookies);
                     }
-                    try {                        
+                    try {
                         request.dispatch(method, path, header, ok1, ok2, context);
                         break;
                     } catch (EOFException pe) {
@@ -382,7 +398,7 @@ class HTTPConnection implements IHTTPConnection {
 			            keyManager.acknowledgeAndClearAuthentication(sslErr);
 		            }
                 err = SVNErrorMessage.create(SVNErrorCode.RA_DAV_REQUEST_FAILED, ssl);
-	            continue;
+	            // continue; http://svnkit.com/tracker/view.php?id=301 - Kohsuke
             } catch (IOException e) {
                 myRepository.getDebugLog().logFine(SVNLogType.NETWORK, e);
                 if (e instanceof SocketTimeoutException) {
@@ -398,11 +414,9 @@ class HTTPConnection implements IHTTPConnection {
                 } else if (e instanceof SVNCancellableOutputStream.IOCancelException) {
                     SVNErrorManager.cancel(e.getMessage(), SVNLogType.NETWORK);
                 } else if (e instanceof SSLException) {                   
-                    err = SVNErrorMessage.create(SVNErrorCode.RA_DAV_REQUEST_FAILED, 
-                            e.getMessage());
+                    err = SVNErrorMessage.create(SVNErrorCode.RA_DAV_REQUEST_FAILED, e);
                 } else {
-                    err = SVNErrorMessage.create(SVNErrorCode.RA_DAV_REQUEST_FAILED, 
-                            e.getMessage());
+                    err = SVNErrorMessage.create(SVNErrorCode.RA_DAV_REQUEST_FAILED, e);
                 }
             } catch (SVNException e) {
                 myRepository.getDebugLog().logFine(SVNLogType.NETWORK, e);
@@ -437,7 +451,7 @@ class HTTPConnection implements IHTTPConnection {
                     authTypes = defaultAuthManager.getAuthTypes(myRepository.getLocation());
                 }
                 try {
-                    myProxyAuthentication = HTTPAuthentication.parseAuthParameters(proxyAuthHeaders, myProxyAuthentication, myCharset, authTypes, null, myRequestCount); 
+                    myProxyAuthentication = HTTPAuthentication.parseAuthParameters(proxyAuthHeaders, myProxyAuthentication, myCharset, authTypes, null, myRequestCount);
                 } catch (SVNException svne) {
                     myRepository.getDebugLog().logFine(SVNLogType.NETWORK, svne);
                     err = svne.getErrorMessage(); 
@@ -495,9 +509,10 @@ class HTTPConnection implements IHTTPConnection {
                 }
                 
                 try {
-                    myChallengeCredentials = HTTPAuthentication.parseAuthParameters(authHeaderValues, myChallengeCredentials, myCharset, authTypes, authManager, myRequestCount); 
+                    myChallengeCredentials = HTTPAuthentication.parseAuthParameters(authHeaderValues, myChallengeCredentials, myCharset, authTypes, authManager, myRequestCount);
                 } catch (SVNException svne) {
-                    err = svne.getErrorMessage(); 
+                    myRepository.getDebugLog().logFine(SVNLogType.NETWORK, svne);
+                    err = svne.getErrorMessage();
                     break;
                 }
 
@@ -555,7 +570,7 @@ class HTTPConnection implements IHTTPConnection {
                 realm = realm == null ? "" : " " + realm;
                 realm = "<" + myHost.getProtocol() + "://" + myHost.getHost() + ":" + myHost.getPort() + ">" + realm;
                 
-                if (httpAuth == null) {
+                if (httpAuth == null || httpAuth==BOGUS_AUTH) {
                     httpAuth = authManager.getFirstAuthentication(ISVNAuthenticationManager.PASSWORD, realm, myRepository.getLocation());
                 } else if (authAttempts >= requestAttempts) {
                     authManager.acknowledgeAuthentication(false, ISVNAuthenticationManager.PASSWORD, realm, request.getErrorMessage(), httpAuth);
@@ -631,12 +646,13 @@ class HTTPConnection implements IHTTPConnection {
         close();
         if (err != null && err.getErrorCode().getCategory() != SVNErrorCode.RA_DAV_CATEGORY &&
             err.getErrorCode() != SVNErrorCode.UNSUPPORTED_FEATURE) {
-            SVNErrorManager.error(err, SVNLogType.NETWORK);
+            SVNErrorManager.error(err.wrap(method+" request failed on '"+path+"'"), SVNLogType.NETWORK);
         }
         // err2 is another default context...
-        myRepository.getDebugLog().logFine(SVNLogType.NETWORK, new Exception(err.getMessage()));
-        SVNErrorMessage err2 = SVNErrorMessage.create(SVNErrorCode.RA_DAV_REQUEST_FAILED, "{0} request failed on ''{1}''", new Object[] {method, path}, err.getType(), err.getCause());
-        SVNErrorManager.error(err, err2, SVNLogType.NETWORK);
+        myRepository.getDebugLog().logFine(SVNLogType.NETWORK, err);
+        SVNErrorMessage err2 = SVNErrorMessage.create(SVNErrorCode.RA_DAV_REQUEST_FAILED, "{0} request failed on ''{1}''", new Object[] {method, path}, err.getType(), err);
+        err2.setChildErrorMessage(err);
+        SVNErrorManager.error(err2, SVNLogType.NETWORK);
         return null;
     }
 

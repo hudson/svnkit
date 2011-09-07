@@ -11,6 +11,7 @@
  */
 package org.tmatesoft.svn.core.internal.io.dav.http;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -74,7 +75,7 @@ public final class HTTPSSLKeyManager implements X509KeyManager {
             }
         } catch (Throwable th) {
             SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, th);
-            throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, "Problems, when connecting with ms capi! "+th.getMessage(), null, SVNErrorMessage.TYPE_ERROR, th), th);
+            throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, "Problems, when connecting with ms capi! "+th.getMessage(), null, SVNErrorMessage.TYPE_ERROR, th));
         }
 
         KeyManagerFactory kmf = null;
@@ -89,7 +90,7 @@ public final class HTTPSSLKeyManager implements X509KeyManager {
             }
             catch (Throwable th) {
                 SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, th);
-                throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, "MS Capi error: "+th.getMessage()), th);
+                throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, "MS Capi error: "+th.getMessage()).initCause(th));
             }
         }
         return result;
@@ -98,19 +99,17 @@ public final class HTTPSSLKeyManager implements X509KeyManager {
     public static KeyManager[] loadClientCertificate(File clientCertFile, String clientCertPassword) throws SVNException {
         char[] passphrase = null;
         if (clientCertPassword == null || clientCertPassword.length() == 0) {
-            // Client certificates without an passphrase can't be received from Java Keystores. 
+            // Client certificates without an passphrase can't be received from Java Keystores.
             throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, "No client certificate passphrase supplied (did you forget to specify?).\n" +
                     "Note that client certificates with empty passphrases can''t be used. In this case please re-create the certificate with a passphrase."));
         }
         if (clientCertPassword != null) {
             passphrase = clientCertPassword.toCharArray();
         }
-        KeyManager[] result = null;
-        KeyStore keyStore = null;
         if (clientCertFile != null && clientCertFile.getName().startsWith(SVNSSLAuthentication.MSCAPI)) {
             SVNDebugLog.getDefaultLog().logError(SVNLogType.CLIENT,"using mscapi");
             try {
-                keyStore = KeyStore.getInstance("Windows-MY");
+                KeyStore keyStore = KeyStore.getInstance("Windows-MY");
                 SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, "using my windows store");
                 if (keyStore != null) {
                     keyStore.load(null, null);
@@ -120,56 +119,65 @@ public final class HTTPSSLKeyManager implements X509KeyManager {
                     kmf = KeyManagerFactory.getInstance("SunX509");
                     if (kmf != null) {
                         kmf.init(keyStore, passphrase);
-                        result = kmf.getKeyManagers();
+                        return kmf.getKeyManagers();
                     }
                 }
-                return result;
+                return null;
             }
             catch (Throwable th) {
                 SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, th);
-                throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, "loadClientCertificate ms capi with file - should not be called: "+th.getMessage(), null, SVNErrorMessage.TYPE_ERROR, th), th);
+                throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, "loadClientCertificate ms capi with file - should not be called: "+th.getMessage(), null, SVNErrorMessage.TYPE_ERROR, th));
             }
 
         }
         final InputStream is = SVNFileUtil.openFileForReading(clientCertFile, SVNLogType.NETWORK);
+        return loadClientCertificate(is,clientCertPassword);
+    }
+
+    public static KeyManager[] loadClientCertificate(InputStream clientCertFile, String clientCertPassword) throws SVNException {
+        char[] passphrase = null;
+        if (clientCertPassword != null) {
+            passphrase = clientCertPassword.toCharArray();
+        }
+        KeyStore keyStore;
         try {
             keyStore = KeyStore.getInstance("PKCS12");
             if (keyStore != null) {
-                keyStore.load(is, passphrase);
+                keyStore.load(clientCertFile, passphrase);
             }
         }
         catch (Throwable th) {
             SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, th);
-            throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, th.getMessage(), null, SVNErrorMessage.TYPE_ERROR, th), th);
+            throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, th.getMessage(), null, SVNErrorMessage.TYPE_ERROR, th));
         }
         finally {
-            SVNFileUtil.closeFile(is);
+            SVNFileUtil.closeFile(clientCertFile);
         }
-        KeyManagerFactory kmf = null;
 
         if (keyStore != null) {
             try {
-                kmf = KeyManagerFactory.getInstance("SunX509");
+                KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
                 if (kmf != null) {
                     kmf.init(keyStore, passphrase);
-                    result = kmf.getKeyManagers();
+                    return kmf.getKeyManagers();
                 }
             }
             catch (Throwable th) {
                 SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, th);
-                throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, th.getMessage()), th);
+                throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, th));
             }
         }
 
-        return result;
+        return null;
     }
-
+//TODO fix me
+/*
     public KeyManager[] loadClientCertificate(SVNSSLAuthentication sslAuthentication) throws SVNException {
         String clientCertPassword = sslAuthentication.getPassword();
         String clientCertPath = sslAuthentication.getCertificatePath();
         File clientCertFile = sslAuthentication.getCertificateFile();
-        
-        char[] passphrase = clientCertPassword == null || clientCertPassword.length() == 0 ? new char[0] : clientCertPassword.toCharArray(); 
+
+        char[] passphrase = clientCertPassword == null || clientCertPassword.length() == 0 ? new char[0] : clientCertPassword.toCharArray();
         String realm = clientCertPath;
         SVNAuthentication auth = null;
 
@@ -213,7 +221,7 @@ public final class HTTPSSLKeyManager implements X509KeyManager {
                 if (auth != null) {
                     authenticationManager.acknowledgeAuthentication(true, ISVNAuthenticationManager.SSL, realm, null, auth);
                 } else {
-                    authenticationManager.acknowledgeAuthentication(true, ISVNAuthenticationManager.SSL, clientCertPath, null, 
+                    authenticationManager.acknowledgeAuthentication(true, ISVNAuthenticationManager.SSL, clientCertPath, null,
                             new SVNPasswordAuthentication("", clientCertPassword, sslAuthentication.isStorageAllowed()) );
                 }
                 break;
@@ -231,12 +239,12 @@ public final class HTTPSSLKeyManager implements X509KeyManager {
                     break;
                 }
                 continue;
-            } catch (Throwable th) {                
+            } catch (Throwable th) {
                 SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, th);
                 throw new SVNException(SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, th.getMessage(), null, SVNErrorMessage.TYPE_ERROR, th), th);
             }
         }
-        
+
         KeyManagerFactory kmf = null;
         if (keyStore != null) {
             try {
@@ -253,6 +261,7 @@ public final class HTTPSSLKeyManager implements X509KeyManager {
         }
         return result;
     }
+    */
 
     private final ISVNAuthenticationManager authenticationManager;
     private final String realm;
@@ -262,7 +271,7 @@ public final class HTTPSSLKeyManager implements X509KeyManager {
     private SVNSSLAuthentication myAuthentication;
     private Exception myException;
     private String chooseAlias = null;
-    
+
     private boolean myIsFirstRequest = true;
 
     public HTTPSSLKeyManager(ISVNAuthenticationManager authenticationManager, String realm, SVNURL url) {
@@ -385,8 +394,9 @@ public final class HTTPSSLKeyManager implements X509KeyManager {
         myException = null;
         if (exception instanceof SVNException) {
             throw (SVNException)exception;
-        } else if (exception != null) {
-            throw new SVNException(SVNErrorMessage.UNKNOWN_ERROR_MESSAGE, exception);
+        }
+        else if (exception != null) {
+            throw new SVNException(SVNErrorMessage.create(SVNErrorCode.UNKNOWN,exception));
         }
     }
 
@@ -427,9 +437,11 @@ public final class HTTPSSLKeyManager implements X509KeyManager {
                 } else {
                     if (authenticationManager instanceof ISVNSSLPasspharsePromptSupport &&
                             ((ISVNSSLPasspharsePromptSupport) authenticationManager).isSSLPassphrasePromtSupported()) {
-                        keyManagers = loadClientCertificate(myAuthentication);
+                        //TODO fix  loadClientCertificate(myAuthentication);
+                        keyManagers = loadClientCertificate();
+                        //keyManagers = loadClientCertificate(myAuthentication);
                     } else {
-                        keyManagers = loadClientCertificate(myAuthentication.getCertificateFile(), myAuthentication.getPassword());
+                        keyManagers = loadClientCertificate(new ByteArrayInputStream(myAuthentication.getCertificateFile()), myAuthentication.getPassword());
                     }
                 }
             } catch (SVNException ex) {

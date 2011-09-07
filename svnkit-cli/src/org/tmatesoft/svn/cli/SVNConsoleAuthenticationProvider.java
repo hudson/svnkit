@@ -380,9 +380,19 @@ public class SVNConsoleAuthenticationProvider implements ISVNAuthenticationProvi
                 } else if ("".equals(alias)) {
                     alias = null;
                 }
-                return new SVNSSLAuthentication(SVNSSLAuthentication.MSCAPI, alias, authMayBeStored, url, false);
+                try {
+                    return new SVNSSLAuthentication(SVNSSLAuthentication.MSCAPI, alias, authMayBeStored, url, false);
+                } catch (IOException e) {
+                    throw new RuntimeException(e); //TODO improve this hack
+                }
             }
-            SVNSSLAuthentication sslAuth = new SVNSSLAuthentication(new File(path), null, authMayBeStored, url, false);
+            SVNSSLAuthentication sslAuth;
+            try {
+                sslAuth = new SVNSSLAuthentication(new File(path), null, authMayBeStored, url,
+                    false);
+            } catch (IOException e) {
+                throw new RuntimeException(e); //TODO improve this hack
+            }
             sslAuth.setCertificatePath(path);
             return sslAuth;
         }

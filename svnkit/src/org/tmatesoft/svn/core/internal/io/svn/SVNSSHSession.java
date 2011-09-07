@@ -54,7 +54,7 @@ public class SVNSSHSession {
     private static final int MAX_SESSIONS_PER_CONNECTION = 8;
     private static final long DEFAULT_CONNECTION_TIMEOUT = 1000*10*60; // ten minutes
 
-    private static Map ourConnectionsPool = new Hashtable();
+    private static final Map ourConnectionsPool = new Hashtable();
     private static boolean ourIsUsePersistentConnection;
     private static Object ourRequestor;
     private static long ourTimeout;
@@ -77,8 +77,7 @@ public class SVNSSHSession {
     }
 
     public static SSHConnectionInfo getConnection(SVNURL location, ISVNSSHHostVerifier verifier, SVNSSHAuthentication credentials, int connectTimeout, boolean useConnectionPing) throws SVNException {
-        lock(Thread.currentThread());
-        try {
+        synchronized (SVNSSHSession.class) {
             if ("".equals(credentials.getUserName()) || credentials.getUserName() == null) {
                 SVNErrorMessage error = SVNErrorMessage.create(SVNErrorCode.RA_NOT_AUTHORIZED, "User name is required to establish SSH connection");
                 SVNErrorManager.error(error, SVNLogType.NETWORK);
@@ -156,14 +155,11 @@ public class SVNSSHSession {
             SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, ourRequestor + ": NEW CONNECTION OPENED, " +
             		"TOTAL: " + connectionsList.size());
             return connectionInfo;
-        } finally {
-            unlock();
         }
     }
 
     static void closeConnection(SSHConnectionInfo connectionInfo) {
-        lock(Thread.currentThread());
-        try {
+        synchronized (SVNSSHSession.class) {
             if (!connectionInfo.isPersistent()) {
                 SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, ourRequestor + ": CLOSED, " +
                 		"NOT PERSISTENT OR STALE: " + connectionInfo);
@@ -205,14 +201,11 @@ public class SVNSSHSession {
                 connectionInfo.startTimeout();
                 SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, ourRequestor + ": CONNECTION NOT CLOSED: " + connectionInfo + ", usable left: " + usable + ", total " + connectionsList.size());
             }
-        } finally {
-            unlock();
         }
     }
 
     public static void shutdown() {
-        lock(Thread.currentThread());
-        try {
+        synchronized (SVNSSHSession.class) {
             for(Iterator lists = ourConnectionsPool.values().iterator(); lists.hasNext();) {
                 LinkedList list = (LinkedList) lists.next();
                 for (Iterator infos = list.iterator(); infos.hasNext();) {
@@ -221,14 +214,11 @@ public class SVNSSHSession {
                 }
             }
             ourConnectionsPool.clear();
-        } finally {
-            unlock();
         }
     }
     
     public static int getConnectionsCount() {
-        lock(Thread.currentThread());
-        try {
+        synchronized (SVNSSHSession.class) {
             int count = 0;
             for (Iterator keys = ourConnectionsPool.keySet().iterator(); keys.hasNext();) {
                 String key = (String) keys.next();
@@ -236,8 +226,6 @@ public class SVNSSHSession {
                 count += list.size();
             }
             return count;
-        } finally {
-            unlock();
         }
     }
 
@@ -363,7 +351,8 @@ public class SVNSSHSession {
         }        
         return true;
     }
-    
+
+    /* this locking mechanism considered harmful: see http://www.nabble.com/Builds-don%27t-work%21%21-td23058973.html
     static void lock(Object requestor) {
         synchronized(ourConnectionsPool) {
             if (ourRequestor == requestor) {
@@ -394,26 +383,21 @@ public class SVNSSHSession {
             }
         }
     }
+    */
     
     static long getTimeout() {
         return ourTimeout;
     }
     
     public static boolean isUsePersistentConnection() {
-        lock(Thread.currentThread());
-        try {
+        synchronized (SVNSSHSession.class) {
             return ourIsUsePersistentConnection;
-        } finally {
-            unlock();
         }
     }
     
     public static void setUsePersistentConnection(boolean usePersistent) {
-        lock(Thread.currentThread());
-        try {
+        synchronized (SVNSSHSession.class) {
             ourIsUsePersistentConnection = usePersistent;
-        } finally {
-            unlock();
         }
     }
     
@@ -435,8 +419,7 @@ public class SVNSSHSession {
         }
         
         public boolean isSessionPingSupported() {
-            lock(Thread.currentThread());
-            try {
+            synchronized (SVNSSHSession.class) {
                 if (myConnection == null) {
                     return false;
                 }
@@ -465,14 +448,11 @@ public class SVNSSHSession {
                     return true;
                 }
                 return false;
-            } finally {
-                unlock();
             }
         }
         
         public void dispose() {
-            lock(Thread.currentThread());
-            try {
+            synchronized (SVNSSHSession.class) {
                 SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, ourRequestor + ": DISPOSING: " + this);
                 if (myTimer != null) {
                     myTimer.cancel();
@@ -484,50 +464,35 @@ public class SVNSSHSession {
                     myConnection.close();
                     myConnection = null;
                 }
-            } finally {
-                unlock();
             }
         }
         
         public void setPersistent(boolean persistent) {
-            lock(Thread.currentThread());
-            try {
+            synchronized (SVNSSHSession.class) {
                 myIsPersistent = persistent;
-            } finally {
-                unlock();
             }
         }
 
         public boolean isPersistent() {
-            lock(Thread.currentThread());
-            try {
+            synchronized (SVNSSHSession.class) {
                 return myIsPersistent;
-            } finally {
-                unlock();
             }
         }
         
         public String getKey() {
-            lock(Thread.currentThread());
-            try {
+            synchronized (SVNSSHSession.class) {
                 return myKey;
-            } finally {
-                unlock();
             }
         }
         
         public int getSessionCount() {
-            lock(Thread.currentThread()); 
-            try {
+            synchronized (SVNSSHSession.class) {
                 return mySessionCount;
-            } finally {
-                unlock();
             }
         }
         
         public Session openSession() throws IOException {
-            lock(Thread.currentThread());
-            try {
+            synchronized (SVNSSHSession.class) {
                 Session session = myConnection.openSession();
                 if (session != null) {
                     mySessionCount++;
@@ -535,14 +500,11 @@ public class SVNSSHSession {
                 SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, 
                         ourRequestor + ": SESSION OPENED: " + this + "." + mySessionCount);
                 return session;
-            } finally {
-                unlock();
             }
         }
         
         public void startTimeout() {
-            lock(Thread.currentThread());
-            try {
+            synchronized (SVNSSHSession.class) {
                 if (ourTimeout <= 0) {
                     return;
                 }
@@ -565,32 +527,34 @@ public class SVNSSHSession {
                         }, ourTimeout);
                     }
                 }
-            } finally {
-                unlock();
             }
         }
 
         public void resetTimeout() {
-            lock(Thread.currentThread());
-            try {
+            synchronized (SVNSSHSession.class) {
                 if (myTimer != null) {
                     myTimer.cancel();
                     myTimer = null;
                 }
-            } finally {
-                unlock();
             }
         }
+
+        // because our patched trilead throws InterruptedException in waitForCondition but the version in SVNKit doesn't,
+        // hide the difference.
+        private void dummy() throws InterruptedException {}
         
-        public boolean closeSession(Session session) {
-            lock(Thread.currentThread()); 
-            try {
+        public boolean closeSession(Session session) throws SVNException {
+            synchronized (SVNSSHSession.class) {
                 if (session == null) {
                     return false;
                 }
                 try {
                     session.close();
                     session.waitForCondition(ChannelCondition.CLOSED, 0);
+                    dummy();
+                } catch (InterruptedException e) {
+                    SVNErrorMessage err = SVNErrorMessage.create(SVNErrorCode.RA_SVN_IO_ERROR, "SSH session failed to shutdown normally and interrupted" );
+                    SVNErrorManager.error(err, e, SVNLogType.NETWORK);
                 } finally {
                     mySessionCount--;
                     SVNDebugLog.getDefaultLog().logFine(SVNLogType.NETWORK, 
@@ -600,14 +564,11 @@ public class SVNSSHSession {
                     mySessionCount = 0;
                 }
                 return mySessionCount <= 0;
-            } finally {
-                unlock();
             }
         }
 
         public void runTimeout() {
-            lock(Thread.currentThread());
-            try {                
+            synchronized (SVNSSHSession.class) {
                 if (mySessionCount > 0) {
                     return;
                 }
@@ -621,8 +582,6 @@ public class SVNSSHSession {
                     ourConnectionsPool.remove(myKey);
                 }
                 dispose();
-            } finally {
-                unlock();
             }
         }
         

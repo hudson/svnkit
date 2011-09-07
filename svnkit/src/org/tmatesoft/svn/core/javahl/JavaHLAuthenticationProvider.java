@@ -12,6 +12,7 @@
 package org.tmatesoft.svn.core.javahl;
 
 import java.io.File;
+import java.io.IOException;
 import java.security.cert.X509Certificate;
 import java.text.MessageFormat;
 
@@ -86,21 +87,23 @@ class JavaHLAuthenticationProvider implements ISVNAuthenticationProvider, ISVNSS
                     if ("".equals(password)) {
                         password = null;
                     }
-                    boolean save = prompt4.userAllowedSave();
-                    if (cert.startsWith(SVNSSLAuthentication.MSCAPI)) {
-                        String alias = null;
-                        if (cert.lastIndexOf(';') > 0) {
-                            alias = cert.substring(cert.lastIndexOf(';') + 1);
+                    try {
+                        boolean save = prompt4.userAllowedSave();
+                        if (cert.startsWith(SVNSSLAuthentication.MSCAPI)) {
+                            String alias = null;
+                            if (cert.lastIndexOf(';') > 0) {
+                                alias = cert.substring(cert.lastIndexOf(';') + 1);
+                            }
+                            return new SVNSSLAuthentication(SVNSSLAuthentication.MSCAPI, alias, save, url, false);
                         }
-                        return new SVNSSLAuthentication(SVNSSLAuthentication.MSCAPI, alias, save, url, false);
+                        return new SVNSSLAuthentication(new File(cert), password, save, url, false);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e); // hack to minimize patching - Kohsuke
                     }
-                    SVNSSLAuthentication sslAuth = new SVNSSLAuthentication(new File(cert), password, save, url, false);
-                    sslAuth.setCertificatePath(cert);
-                    return sslAuth;
                 }
             }
             return null;
-        } 
+        }
         if (ISVNAuthenticationManager.SSH.equals(kind) && previousAuth == null) {
             // use configuration file here? but it was already used once...
             String keyPath = System.getProperty("svnkit.ssh2.key", System.getProperty("javasvn.ssh2.key"));
