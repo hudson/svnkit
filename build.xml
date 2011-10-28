@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project name="svnkit" default="deploy" basedir="." xmlns:artifact="antlib:org.apache.maven.artifact.ant">
-	
+
 	<target name="init-revision" if="build.vcs.number.1">
     	<replace file="build/lib/svnkit.build.properties" token="SNAPSHOT" value="${build.vcs.number.1}" />
 	</target>
@@ -667,21 +667,43 @@
  		<delete dir="build/maven/org.tmatesoft.sqljet-${sqljet.version}"/>
 	</target>
 
+    <property name="dist" location="build/maven-deploy" />
+
+    <!-- define Maven coordinates -->
+    <property name="groupId" value="org.hudsonci.tools" />
+    <property name="artifactId" value="svnkit" />
+    <property name="version" value="1.3.5-hudson-1" />
+
+        <!-- define artifacts' name, which follows the convention of Maven -->
+    <property name="maven-jar" value="${dist}/lib/${artifactId}-${version}.jar" />
+    <property name="maven-javadoc-jar" value="${dist}/lib/${artifactId}-${version}-javadoc.jar" />
+    <property name="maven-sources-jar" value="${dist}/lib/${artifactId}-${version}-sources.jar" />
+    <property name="pom" value="${dist}/lib/pom.xml" />
+
+        <!-- defined maven snapshots and staging repository id and url -->
+    <!-- property name="maven-snapshots-repository-id" value="sonatype-nexus-snapshots" />
+    <property name="maven-snapshots-repository-url" value="https://oss.sonatype.org/content/repositories/snapshots/" / -->
+    <property name="maven-staging-repository-id" value="sonatype-nexus-staging" />
+    <property name="maven-staging-repository-url" value="https://oss.sonatype.org/service/local/staging/deploy/maven2/" />
+
+
 	<target name="deploy-maven" depends="clean,init-environment,build-library,build-doc">
 		<path id="maven-ant-tasks.classpath" path="contrib/maven/maven-ant-tasks-2.0.10.jar" />
 		<typedef resource="org/apache/maven/artifact/ant/antlib.xml" uri="antlib:org.apache.maven.artifact.ant" classpathref="maven-ant-tasks.classpath" />
-		
+
 		<mkdir dir="build/maven-deploy"/>
-		<mkdir dir="build/maven-deploy/org.tmatesoft.svnkit-${build.number}"/>
+        <mkdir dir="${dist}/lib" />
+		<!-- mkdir dir="build/maven-deploy/org.tmatesoft.svnkit-${build.number}"/>
 		<mkdir dir="build/maven-deploy/org.tmatesoft.svnkit-javahl-${build.number}"/>
 
 		<mkdir dir="build/maven-deploy/com.trilead.ssh2-${trilead.ssh2.version}"/>
-		<mkdir dir="build/maven-deploy/com.sun.jna-${jna.version}"/>
+		<mkdir dir="build/maven-deploy/com.sun.jna-${jna.version}"/ -->
 		
 		<mkdir dir="svnkit-eclipse/bin"/>
-		
+
 		<!-- pack svnkit-xxx.jar without javahl, cli, eclipse plugin -->
-		<jar destfile="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/svnkit-${build.number}.jar">
+        <!-- jar destfile="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/svnkit-${build.number}.jar" -->
+		<jar destfile="${maven-jar}">
             <fileset dir="svnkit/bin">
                 <exclude name="org/tigris/**" />
             </fileset>        	
@@ -708,7 +730,8 @@
 		</jar>
 
 		<!-- pack sources for the svnkit-xxx.jar into svnkit-xxx-sources.jar without javahl, cli, eclipse plugin -->
-		<jar destfile="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/svnkit-${build.number}-sources.jar">
+		<!-- jar destfile="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/svnkit-${build.number}-sources.jar" -->
+		<jar destfile="${maven-sources-jar}">
             <fileset dir="build/lib">
                 <include name="changelog.txt" />
                 <include name="README.txt" />
@@ -734,7 +757,7 @@
 		</jar>
 
 		<!-- pack svnkit-javahl-xxx.jar for javahl classes only -->
-		<jar destfile="build/maven-deploy/org.tmatesoft.svnkit-javahl-${build.number}/svnkit-javahl-${build.number}.jar">
+		<!-- jar destfile="build/maven-deploy/org.tmatesoft.svnkit-javahl-${build.number}/svnkit-javahl-${build.number}.jar">
             <fileset dir="svnkit/bin">
                 <include name="org/tigris/**" />
             </fileset>
@@ -748,10 +771,10 @@
             <fileset dir="contrib/javahl">
                 <include name="JAVAHL-LICENSE" />
             </fileset>
-        </jar>
+        </jar -->
 		
 		<!-- pack svnkit-javahl-xxx.jar sources into svnkit-javahl-xxx-sources.jar for javahl classes only -->
-		<jar destfile="build/maven-deploy/org.tmatesoft.svnkit-javahl-${build.number}/svnkit-javahl-${build.number}-sources.jar">
+		<!-- jar destfile="build/maven-deploy/org.tmatesoft.svnkit-javahl-${build.number}/svnkit-javahl-${build.number}-sources.jar">
 			<fileset dir="svnkit/src">
 				<exclude name=".svn"/>
 				<exclude name=".svn/**"/>
@@ -767,21 +790,27 @@
             <fileset dir="contrib/javahl" >
                 <include name="JAVAHL-LICENSE" />
             </fileset>
-		</jar>
+		</jar -->
 		
-		<jar destfile="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/svnkit-${build.number}-javadoc.jar">
+		<!-- jar destfile="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/svnkit-${build.number}-javadoc.jar" -->
+		<!-- jar destfile="${maven-javadoc-jar}">
 			<fileset dir="build/doc/javadoc">
 				<include name="**"/>
 			</fileset>
+		</jar -->
+		<!-- build the javadoc artifact -->
+		<jar jarfile="${maven-javadoc-jar}">
+			<fileset dir="build/doc/javadoc" />
 		</jar>
 		
-		<copy file="pom.xml" tofile="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/pom.xml"/>
-		<replace token="%svnkit.version%" value="${build.number}" file="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/pom.xml"/>
-		<replace token="%trilead.ssh2.version%" value="${trilead.ssh2.version}" file="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/pom.xml"/>
-        <replace token="%jna.version%" value="${jna.version}" file="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/pom.xml"/>
-        <replace token="%sqljet.version%" value="${sqljet.version}" file="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/pom.xml"/>
+		<!-- copy file="pom.xml" tofile="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/pom.xml"/ -->
+		<copy file="pom.xml" tofile="${pom}"/>
+		<!-- replace token="%svnkit.version%" value="${build.number}" file="${pom}"/>
+		<replace token="%trilead.ssh2.version%" value="${trilead.ssh2.version}" file="${pom}"/>
+        <replace token="%jna.version%" value="${jna.version}" file="${pom}"/>
+        <replace token="%sqljet.version%" value="${sqljet.version}" file="${pom}"/ -->
 
-		<copy file="contrib/trilead/pom.xml" tofile="build/maven-deploy/com.trilead.ssh2-${trilead.ssh2.version}/pom.xml"/>
+		<!-- copy file="contrib/trilead/pom.xml" tofile="build/maven-deploy/com.trilead.ssh2-${trilead.ssh2.version}/pom.xml"/>
 		<replace token="%trilead.ssh2.version%" value="${trilead.ssh2.version}" file="build/maven-deploy/com.trilead.ssh2-${trilead.ssh2.version}/pom.xml"/>
 
 		<copy file="contrib/jna/pom.xml" tofile="build/maven-deploy/com.sun.jna-${jna.version}/pom.xml"/>
@@ -791,14 +820,14 @@
 		<replace token="%svnkit.version%" value="${build.number}" file="build/maven-deploy/org.tmatesoft.svnkit-javahl-${build.number}/pom.xml"/>
 
 		<copy file="contrib/trilead/trilead.jar" tofile="build/maven-deploy/com.trilead.ssh2-${trilead.ssh2.version}/trilead-${trilead.ssh2.version}.jar" />
-		<copy file="contrib/jna/jna.jar" tofile="build/maven-deploy/com.sun.jna-${jna.version}/jna-${jna.version}.jar" />
+		<copy file="contrib/jna/jna.jar" tofile="build/maven-deploy/com.sun.jna-${jna.version}/jna-${jna.version}.jar" / -->
 
-		<artifact:pom id="svnkit.pom" file="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/pom.xml" />
-		<artifact:pom id="trilead.pom" file="build/maven-deploy/com.trilead.ssh2-${trilead.ssh2.version}/pom.xml" />
+		<!-- artifact:pom id="svnkit.pom" file="${dist}/lib/pom.xml" / -->
+		<!-- artifact:pom id="trilead.pom" file="build/maven-deploy/com.trilead.ssh2-${trilead.ssh2.version}/pom.xml" />
 		<artifact:pom id="jna.pom" file="build/maven-deploy/com.sun.jna-${jna.version}/pom.xml" />
-		<artifact:pom id="svnkit-javahl.pom" file="build/maven-deploy/org.tmatesoft.svnkit-javahl-${build.number}/pom.xml" />
+		<artifact:pom id="svnkit-javahl.pom" file="build/maven-deploy/org.tmatesoft.svnkit-javahl-${build.number}/pom.xml" / -->
 
-		<mkdir dir="build/maven-deploy/m2repo" />
+		<!-- mkdir dir="build/maven-deploy/m2repo" />
 		<artifact:deploy file="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/svnkit-${build.number}.jar">
 			<attach file="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/svnkit-${build.number}-sources.jar" classifier="sources" />
 			<attach file="build/maven-deploy/org.tmatesoft.svnkit-${build.number}/svnkit-${build.number}-javadoc.jar" classifier="javadoc" />
@@ -831,10 +860,51 @@
 		<delete dir="build/maven-deploy/org.tmatesoft.svnkit-${build.number}" />
 		<delete dir="build/maven-deploy/org.tmatesoft.svnkit-javahl-${build.number}" />
 		<delete dir="build/maven-deploy/com.trilead.ssh2-${trilead.ssh2.version}"/>
- 		<delete dir="build/maven-deploy/com.sun.jna-${jna.version}"/>
+ 		<delete dir="build/maven-deploy/com.sun.jna-${jna.version}"/ -->
 	</target>
-	
-	<target name="deploy-eclipse"
+
+    <target name="stage-javadoc" depends="deploy-maven" description="deploy release version to Maven staging repository">
+        <path id="maven-ant-tasks.classpath" path="contrib/maven/maven-ant-tasks-2.0.10.jar" />
+        <typedef resource="org/apache/maven/artifact/ant/antlib.xml" uri="antlib:org.apache.maven.artifact.ant" classpathref="maven-ant-tasks.classpath" />
+        <artifact:mvn>
+            <arg value="org.apache.maven.plugins:maven-gpg-plugin:1.3:sign-and-deploy-file"/>
+            <arg value="-Durl=${maven-staging-repository-url}"/>
+            <arg value="-DrepositoryId=${maven-staging-repository-id}"/>
+            <arg value="-DpomFile=${pom}"/>
+            <arg value="-Dfile=${maven-javadoc-jar}"/>
+            <arg value="-Dclassifier=javadoc"/>
+            <arg value="-Pgpg"/>
+        </artifact:mvn>
+    </target>
+
+    <target name="stage-sources" depends="deploy-maven" description="deploy release version to Maven staging repository">
+        <path id="maven-ant-tasks.classpath" path="contrib/maven/maven-ant-tasks-2.0.10.jar" />
+        <typedef resource="org/apache/maven/artifact/ant/antlib.xml" uri="antlib:org.apache.maven.artifact.ant" classpathref="maven-ant-tasks.classpath" />
+        <artifact:mvn>
+            <arg value="org.apache.maven.plugins:maven-gpg-plugin:1.3:sign-and-deploy-file"/>
+            <arg value="-Durl=${maven-staging-repository-url}"/>
+            <arg value="-DrepositoryId=${maven-staging-repository-id}"/>
+            <arg value="-DpomFile=${pom}"/>
+            <arg value="-Dfile=${maven-sources-jar}"/>
+            <arg value="-Dclassifier=sources"/>
+            <arg value="-Pgpg"/>
+        </artifact:mvn>
+    </target>
+
+    <target name="stage-jar" depends="deploy-maven" description="deploy release version to Maven staging repository">
+        <path id="maven-ant-tasks.classpath" path="contrib/maven/maven-ant-tasks-2.0.10.jar" />
+        <typedef resource="org/apache/maven/artifact/ant/antlib.xml" uri="antlib:org.apache.maven.artifact.ant" classpathref="maven-ant-tasks.classpath" />
+        <artifact:mvn>
+            <arg value="org.apache.maven.plugins:maven-gpg-plugin:1.3:sign-and-deploy-file"/>
+            <arg value="-Durl=${maven-staging-repository-url}"/>
+            <arg value="-DrepositoryId=${maven-staging-repository-id}"/>
+            <arg value="-DpomFile=${pom}"/>
+            <arg value="-Dfile=${maven-jar}"/>
+            <arg value="-Pgpg"/>
+        </artifact:mvn>
+    </target>
+
+    <target name="deploy-eclipse"
             depends="init-environment,build-library,build-src,build-doc,build-eclipse"
             if="eclipse.present">
     	<mkdir dir="build/deploy"/>

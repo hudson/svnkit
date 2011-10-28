@@ -12,9 +12,6 @@
       <url>http://svnkit.com/license.html</url>
     </license>
   </licenses>
-  <distributionManagement>
-    <downloadUrl>http://svnkit.com/download/index.php</downloadUrl>
-  </distributionManagement>
   <dependencies>
     <dependency>
       <groupId>net.java.dev.jna</groupId>
@@ -35,4 +32,29 @@
       <optional>true</optional>       
     </dependency>
   </dependencies>
+
+  <scm>
+    <connection>scm:git:git://github.com/hudson/svnkit.git</connection>
+    <developerConnection>scm:git:git@github.com:hudson/svnkit.git</developerConnection>
+    <url>https://github.com/hudson/svnkit</url>
+  </scm>
+
+  <distributionManagement>
+    <snapshotRepository>
+      <id>sonatype-nexus-snapshots</id>
+      <name>Sonatype Nexus Snapshots</name>
+      <url>https://oss.sonatype.org/content/repositories/snapshots/</url>
+    </snapshotRepository>
+    <repository>
+      <id>sonatype-nexus-staging</id>
+      <name>Nexus Release Repository</name>
+      <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+    </repository>
+  </distributionManagement>
+
+  <developers>
+      <developer>
+         <name>Many</name>
+      </developer>
+  </developers>
 </project>
