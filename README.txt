@@ -26,7 +26,10 @@ SVNKit allows to work with Subversion repositories and Subversion working copies
 direct repository access as well as support for all high level Subversion operation that are 
 available with the command line Subversion client. 
 
-This version of SVNKit supports all Subversion 1.6.15 features and supports older Subversion repositories.
+This version of SVNKit supports all Subversion 1.6.17 features and supports older Subversion repositories.
+
+This version of SVNKit supports Subversion 1.7.0 and newer servers, but DOES NOT support new Subversion 1.7
+working copy format. New Subversion 1.7 working copy format is supported in SVNKit 1.7 or newer versions. 
 
 4. RESOURCES
 
